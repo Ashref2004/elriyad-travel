@@ -1915,64 +1915,60 @@
                 });
                 
                 tripForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    const mode = this.dataset.mode;
-                    const tripData = {
-                        date: document.getElementById('tripDate').value,
-                        airline: document.getElementById('tripAirline').value,
-                        airline_logo: document.getElementById('tripAirlineLogo').value || '',
-                        route: document.getElementById('tripRoute').value,
-                        duration: parseInt(document.getElementById('tripDuration').value),
-                        type: document.getElementById('tripType').value,
-                        state: document.getElementById('tripState').value,
-                        room5_price: parseInt(document.getElementById('tripPrice5').value),
-                        room4_price: parseInt(document.getElementById('tripPrice4').value),
-                        room3_price: parseInt(document.getElementById('tripPrice3').value),
-                        room2_price: parseInt(document.getElementById('tripPrice2').value)
-                    };
-                    
-                    if (!tripData.date || !tripData.airline || !tripData.route || !tripData.duration) {
-                        showToast('الرجاء ملء جميع الحقول المطلوبة', false);
-                        return;
-                    }
-                    
-                    try {
-                        let response;
-                        
-                        if (mode === 'add') {
-                            response = await fetchAPI(`${API_BASE_URL}/trips`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(tripData)
-                            });
-                        } else {
-                            response = await fetchAPI(`${API_BASE_URL}/trips/${this.dataset.id}`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(tripData)
-                            });
-                        }
+    e.preventDefault();
     
-                        if (response) {
-                            showToast(mode === 'add' ? 'تم إضافة الرحلة بنجاح' : 'تم تحديث الرحلة بنجاح');
-                            
-                            document.querySelector('.add-trip-form').style.display = 'none';
-                            addTripBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة رحلة جديدة';
-                            
-                            renderAdminTrips();
-                            setupTripSelector();
-                            updateDashboardStats();
-                        }
-                    } catch (error) {
-                        console.error('Error saving trip:', error);
-                        showToast('حدث خطأ أثناء حفظ الرحلة', false);
-                    }
-                });
+    const mode = this.dataset.mode;
+    const tripData = {
+        date: document.getElementById('tripDate').value,
+        airline: document.getElementById('tripAirline').value,
+        airline_logo: document.getElementById('tripAirlineLogo').value || '',
+        route: document.getElementById('tripRoute').value,
+        duration: parseInt(document.getElementById('tripDuration').value),
+        type: document.getElementById('tripType').value,
+        state: document.getElementById('tripState').value,
+        room5_price: parseInt(document.getElementById('tripPrice5').value),
+        room4_price: parseInt(document.getElementById('tripPrice4').value),
+        room3_price: parseInt(document.getElementById('tripPrice3').value),
+        room2_price: parseInt(document.getElementById('tripPrice2').value)
+    };
+    
+    try {
+        let response;
+        let url = `${API_BASE_URL}/trips`;
+        let method = 'POST';
+        
+        if (mode === 'edit') {
+            url = `${API_BASE_URL}/trips/${this.dataset.id}`;
+            method = 'PUT';
+        }
+        
+        response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tripData)
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save trip');
+        }
+        
+        showToast(mode === 'add' ? 'تم إضافة الرحلة بنجاح' : 'تم تحديث الرحلة بنجاح');
+        
+        document.querySelector('.add-trip-form').style.display = 'none';
+        addTripBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة رحلة جديدة';
+        
+        renderAdminTrips();
+        setupTripSelector();
+        updateDashboardStats();
+    } catch (error) {
+        console.error('Error saving trip:', error);
+        showToast(error.message || 'حدث خطأ أثناء حفظ الرحلة', false);
+    }
+});
                 
                 tripSelector.addEventListener('change', function() {
                     loadTripStatus(this.value);
