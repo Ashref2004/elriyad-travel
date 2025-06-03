@@ -1365,13 +1365,111 @@
                 try {
                     const response = await fetch(url, options);
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                     }
                     return await response.json();
                 } catch (error) {
                     console.error('Error fetching API:', error);
                     showToast('حدث خطأ في الاتصال بالخادم', false);
                     return null;
+                }
+            }
+    
+            async function renderAdminBookings() {
+                bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><h4>جاري تحميل الحجوزات...</h4></div>';
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/bookings`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch bookings');
+                    }
+                    
+                    const bookings = await response.json();
+                    
+                    if (!bookings || bookings.length === 0) {
+                        bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><h4>لا توجد حجوزات متاحة</h4><p>لم يتم العثور على أي حجوزات في النظام</p></div>';
+                        return;
+                    }
+    
+                    bookingsList.innerHTML = '';
+                    
+                    bookings.forEach(booking => {
+                        const bookingItem = document.createElement('div');
+                        bookingItem.className = 'booking-item';
+                        
+                        bookingItem.innerHTML = `
+                            <div class="booking-item-header">
+                                <div class="booking-item-title">${booking.firstName} ${booking.lastName}</div>
+                                <div class="booking-item-date">${formatDate(booking.bookingDate)}</div>
+                            </div>
+                            <div class="booking-item-details">
+                                <div class="booking-detail">
+                                    <label>البريد الإلكتروني</label>
+                                    <span>${booking.email}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>رقم الهاتف</label>
+                                    <span>${booking.phone}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>نوع العمرة</label>
+                                    <span>${getUmrahTypeText(booking.umrahType)}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>نوع الغرفة</label>
+                                    <span>${getRoomTypeText(booking.roomType)}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>الحالة</label>
+                                    <span class="status-badge status-${booking.status}">
+                                        ${getBookingStatusText(booking.status)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="admin-actions">
+                                <button class="btn-admin btn-approve" data-id="${booking.id}">
+                                    <i class="fas fa-check"></i> قبول
+                                </button>
+                                <button class="btn-admin btn-reject" data-id="${booking.id}">
+                                    <i class="fas fa-times"></i> رفض
+                                </button>
+                                <button class="btn-admin btn-delete" data-id="${booking.id}">
+                                    <i class="fas fa-trash"></i> حذف
+                                </button>
+                            </div>
+                        `;
+                        
+                        bookingsList.appendChild(bookingItem);
+                    });
+    
+                    document.querySelectorAll('.btn-approve').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            updateBookingStatus(this.dataset.id, 'approved');
+                        });
+                    });
+                    
+                    document.querySelectorAll('.btn-reject').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            updateBookingStatus(this.dataset.id, 'rejected');
+                        });
+                    });
+                    
+                    document.querySelectorAll('.btn-delete').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            deleteBooking(this.dataset.id);
+                        });
+                    });
+    
+                } catch (error) {
+                    console.error('Error loading bookings:', error);
+                    bookingsList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h4>حدث خطأ في تحميل الحجوزات</h4>
+                            <p>${error.message || 'الرجاء المحاولة مرة أخرى لاحقاً'}</p>
+                        </div>
+                    `;
                 }
             }
     
@@ -1382,13 +1480,23 @@
                     const response = await fetch(`${API_BASE_URL}/trips`);
                     
                     if (!response.ok) {
-                        throw new Error('Failed to fetch trips');
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch trips');
                     }
                     
                     const trips = await response.json();
                     
                     if (!trips || trips.length === 0) {
-                        tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-plane-slash"></i><h4>لا توجد رحلات متاحة</h4><p>قم بإضافة رحلة جديدة لتبدأ في استقبال الحجوزات</p><button id="addTripBtn2" class="btn"><i class="fas fa-plus"></i> إضافة رحلة جديدة</button></div>';
+                        tripsList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-plane-slash"></i>
+                                <h4>لا توجد رحلات متاحة</h4>
+                                <p>قم بإضافة رحلة جديدة لتبدأ في استقبال الحجوزات</p>
+                                <button id="addTripBtn2" class="btn">
+                                    <i class="fas fa-plus"></i> إضافة رحلة جديدة
+                                </button>
+                            </div>
+                        `;
                         return;
                     }
     
@@ -1439,7 +1547,116 @@
     
                 } catch (error) {
                     console.error('Error loading trips:', error);
-                    tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>حدث خطأ في تحميل الرحلات</h4><p>الرجاء المحاولة مرة أخرى لاحقاً</p></div>';
+                    tripsList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h4>حدث خطأ في تحميل الرحلات</h4>
+                            <p>${error.message || 'الرجاء المحاولة مرة أخرى لاحقاً'}</p>
+                            <button onclick="location.reload()" class="btn">إعادة تحميل</button>
+                        </div>
+                    `;
+                }
+            }
+    
+            async function updateDashboardStats() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/stats`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch stats');
+                    }
+                    
+                    const stats = await response.json();
+                    
+                    totalBookingsEl.textContent = stats.total_bookings || 0;
+                    pendingBookingsEl.textContent = stats.pending_bookings || 0;
+                    approvedBookingsEl.textContent = stats.approved_bookings || 0;
+                    totalTripsEl.textContent = stats.total_trips || 0;
+    
+                    // Update charts if they exist
+                    if (bookingsByStateChart) {
+                        bookingsByStateChart.data.labels = Object.keys(stats.state_stats || {});
+                        bookingsByStateChart.data.datasets[0].data = Object.values(stats.state_stats || {});
+                        bookingsByStateChart.update();
+                    }
+    
+                    if (bookingsByTypeChart) {
+                        bookingsByTypeChart.data.labels = Object.keys(stats.type_stats || {});
+                        bookingsByTypeChart.data.datasets[0].data = Object.values(stats.type_stats || {});
+                        bookingsByTypeChart.update();
+                    }
+    
+                } catch (error) {
+                    console.error('Error loading stats:', error);
+                    showToast('حدث خطأ أثناء تحميل الإحصائيات', false);
+                }
+            }
+    
+            async function renderCharts() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/stats`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch stats');
+                    }
+                    
+                    const stats = await response.json();
+    
+                    // State Chart
+                    const stateCtx = document.getElementById('bookingsByStateChart').getContext('2d');
+                    bookingsByStateChart = new Chart(stateCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: Object.keys(stats.state_stats || {}),
+                            datasets: [{
+                                label: 'عدد الحجوزات',
+                                data: Object.values(stats.state_stats || {}),
+                                backgroundColor: 'rgba(46, 125, 50, 0.7)',
+                                borderColor: 'rgba(46, 125, 50, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+    
+                    // Type Chart
+                    const typeCtx = document.getElementById('bookingsByTypeChart').getContext('2d');
+                    bookingsByTypeChart = new Chart(typeCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: Object.keys(stats.type_stats || {}),
+                            datasets: [{
+                                label: 'عدد الحجوزات',
+                                data: Object.values(stats.type_stats || {}),
+                                backgroundColor: [
+                                    'rgba(46, 125, 50, 0.7)',
+                                    'rgba(76, 175, 80, 0.7)',
+                                    'rgba(139, 195, 74, 0.7)',
+                                    'rgba(205, 220, 57, 0.7)'
+                                ],
+                                borderColor: [
+                                    'rgba(46, 125, 50, 1)',
+                                    'rgba(76, 175, 80, 1)',
+                                    'rgba(139, 195, 74, 1)',
+                                    'rgba(205, 220, 57, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+    
+                } catch (error) {
+                    console.error('Error rendering charts:', error);
                 }
             }
     
@@ -1522,7 +1739,16 @@
                                 setupTripSelector();
                                 
                                 if (document.querySelectorAll('.trip-item').length === 0) {
-                                    tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-plane-slash"></i><h4>لا توجد رحلات متاحة</h4><p>قم بإضافة رحلة جديدة لتبدأ في استقبال الحجوزات</p><button id="addTripBtn2" class="btn"><i class="fas fa-plus"></i> إضافة رحلة جديدة</button></div>';
+                                    tripsList.innerHTML = `
+                                        <div class="empty-state">
+                                            <i class="fas fa-plane-slash"></i>
+                                            <h4>لا توجد رحلات متاحة</h4>
+                                            <p>قم بإضافة رحلة جديدة لتبدأ في استقبال الحجوزات</p>
+                                            <button id="addTripBtn2" class="btn">
+                                                <i class="fas fa-plus"></i> إضافة رحلة جديدة
+                                            </button>
+                                        </div>
+                                    `;
                                 }
                             }
                         } catch (error) {
@@ -1589,6 +1815,74 @@
                     console.error('Error loading trip status:', error);
                     showToast('حدث خطأ أثناء تحميل حالة الغرف', false);
                 }
+            }
+    
+            async function updateBookingStatus(bookingId, status) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ status })
+                    });
+    
+                    if (!response.ok) {
+                        throw new Error('Failed to update booking');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.message) {
+                        showToast(`تم تحديث حالة الحجز #${bookingId} بنجاح`);
+                        renderAdminBookings();
+                        updateDashboardStats();
+                    }
+                } catch (error) {
+                    console.error('Error updating booking:', error);
+                    showToast('حدث خطأ أثناء تحديث حالة الحجز', false);
+                }
+            }
+    
+            async function deleteBooking(bookingId) {
+                Swal.fire({
+                    title: 'هل أنت متأكد؟',
+                    text: "لن تتمكن من استعادة هذا الحجز!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#2E7D32',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'نعم، احذفه!',
+                    cancelButtonText: 'إلغاء'
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}`, {
+                                method: 'DELETE'
+                            });
+    
+                            if (!response.ok) {
+                                throw new Error('Failed to delete booking');
+                            }
+                            
+                            const result = await response.json();
+                            
+                            if (result.message) {
+                                showToast(`تم حذف الحجز #${bookingId} بنجاح`);
+                                
+                                const bookingItem = document.querySelector(`.booking-item[data-id="${bookingId}"]`);
+                                if (bookingItem) {
+                                    bookingItem.remove();
+                                }
+                                
+                                updateDashboardStats();
+                            }
+                        } catch (error) {
+                            console.error('Error deleting booking:', error);
+                            showToast('حدث خطأ أثناء حذف الحجز', false);
+                        }
+                    }
+                });
             }
     
             function setupEventListeners() {
