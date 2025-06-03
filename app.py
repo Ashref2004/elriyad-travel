@@ -88,69 +88,42 @@ def check_password():
 def serve_dashboard():
     return render_template('dashboard.html')
 
-@app.route('/api/trips', methods=['GET'])
-def get_trips():
-    state = request.args.get('state', 'all')
-    trip_type = request.args.get('type', 'all')
-    
+@app.route('/api/trips', methods=['POST'])
+def create_trip():
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        required_fields = ['date', 'airline', 'route', 'duration', 'type', 'state', 
+                          'room5_price', 'room4_price', 'room3_price', 'room2_price']
+        
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
         conn = get_db()
         c = conn.cursor()
         
-        query = 'SELECT * FROM trips'
-        params = []
+        c.execute('''INSERT INTO trips 
+            (date, airline, airline_logo, route, duration, type, state,
+             room5_price, room5_status, room4_price, room4_status,
+             room3_price, room3_status, room2_price, room2_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (data['date'], data['airline'], data.get('airline_logo', ''), data['route'], 
+             data['duration'], data['type'], data['state'],
+             data['room5_price'], 'available', data['room4_price'], 'available',
+             data['room3_price'], 'available', data['room2_price'], 'available'))
         
-        if state != 'all' or trip_type != 'all':
-            query += ' WHERE '
-            conditions = []
-            
-            if state != 'all':
-                conditions.append('state = ?')
-                params.append(state)
-                
-            if trip_type != 'all':
-                conditions.append('type = ?')
-                params.append(trip_type)
-                
-            query += ' AND '.join(conditions)
+        trip_id = c.lastrowid
+        conn.commit()
         
-        c.execute(query, params)
-        trips = c.fetchall()
-        
-        trips_list = []
-        for trip in trips:
-            trips_list.append({
-                'id': trip['id'],
-                'date': trip['date'],
-                'airline': trip['airline'],
-                'airline_logo': trip['airline_logo'],
-                'route': trip['route'],
-                'duration': trip['duration'],
-                'type': trip['type'],
-                'state': trip['state'],
-                'room5': {
-                    'price': trip['room5_price'],
-                    'status': trip['room5_status']
-                },
-                'room4': {
-                    'price': trip['room4_price'],
-                    'status': trip['room4_status']
-                },
-                'room3': {
-                    'price': trip['room3_price'],
-                    'status': trip['room3_status']
-                },
-                'room2': {
-                    'price': trip['room2_price'],
-                    'status': trip['room2_status']
-                }
-            })
-        
-        return jsonify(trips_list)
+        return jsonify({'message': 'Trip created successfully', 'id': trip_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
 
 @app.route('/api/trips/<int:trip_id>', methods=['GET'])
 def get_trip(trip_id):
