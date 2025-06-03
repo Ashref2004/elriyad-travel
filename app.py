@@ -168,40 +168,6 @@ def get_trip(trip_id):
     finally:
         conn.close()
 
-@app.route('/api/trips', methods=['POST'])
-def create_trip():
-    data = request.get_json()
-    
-    required_fields = ['date', 'airline', 'route', 'duration', 'type', 'state', 
-                      'room5_price', 'room4_price', 'room3_price', 'room2_price']
-    
-    for field in required_fields:
-        if field not in data:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
-    
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        
-        c.execute('''INSERT INTO trips 
-            (date, airline, airline_logo, route, duration, type, state,
-             room5_price, room5_status, room4_price, room4_status,
-             room3_price, room3_status, room2_price, room2_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (data['date'], data['airline'], data.get('airline_logo', ''), data['route'], 
-             data['duration'], data['type'], data['state'],
-             data['room5_price'], 'available', data['room4_price'], 'available',
-             data['room3_price'], 'available', data['room2_price'], 'available'))
-        
-        trip_id = c.lastrowid
-        conn.commit()
-        
-        return jsonify({'message': 'Trip created successfully', 'id': trip_id}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
-
 @app.route('/api/trips/<int:trip_id>', methods=['PUT'])
 def update_trip(trip_id):
     data = request.get_json()
