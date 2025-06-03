@@ -1257,6 +1257,7 @@
                     toggleChartsBtn.innerHTML = '<i class="fas fa-chart-bar"></i> عرض الإحصائيات التفصيلية';
                 }
             }
+    
             function showToast(message, isSuccess = true) {
                 toastMessage.textContent = message;
                 toast.style.background = isSuccess ? 'var(--gradient)' : 'linear-gradient(135deg, #F44336 0%, #D32F2F 100%)';
@@ -1374,175 +1375,17 @@
                 }
             }
     
-            async function renderAdminBookings() {
-                bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><h4>جاري تحميل الحجوزات...</h4></div>';
-                
-                try {
-                    const bookings = await fetchAPI(`${API_BASE_URL}/bookings`);
-                    
-                    if (!bookings || bookings.length === 0) {
-                        bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><h4>لا توجد حجوزات متاحة</h4><p>لم يتم العثور على أي حجوزات في النظام</p></div>';
-                        return;
-                    }
-    
-                    bookingsList.innerHTML = '';
-                    
-                    bookings.forEach(booking => {
-                        const bookingItem = document.createElement('div');
-                        bookingItem.className = 'booking-item';
-                        bookingItem.dataset.id = booking.id;
-                        bookingItem.dataset.status = booking.status;
-                        
-                        bookingItem.innerHTML = `
-                            <div class="booking-item-header">
-                                <div class="booking-item-title">حجز #${booking.id} - ${booking.firstName} ${booking.lastName}</div>
-                                <div class="booking-item-date">${formatDate(booking.bookingDate)}</div>
-                            </div>
-                            <div class="booking-item-details">
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-plane"></i> الرحلة</label>
-                                    <span>${booking.trip.airline} - ${formatDate(booking.trip.date)}</span>
-                                </div>
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-bed"></i> نوع الغرفة</label>
-                                    <span>${getRoomTypeText(booking.roomType)}</span>
-                                </div>
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-star"></i> نوع العمرة</label>
-                                    <span>${getUmrahTypeText(booking.umrahType)}</span>
-                                </div>
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-passport"></i> رقم الجواز</label>
-                                    <span>${booking.passportNumber}</span>
-                                </div>
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-map-marker-alt"></i> مكان الميلاد</label>
-                                    <span>${getStateText(booking.birthPlace)}</span>
-                                </div>
-                                <div class="booking-detail">
-                                    <label><i class="fas fa-info-circle"></i> الحالة</label>
-                                    <span class="status-badge status-${booking.status}">
-                                        <i class="fas ${booking.status === 'approved' ? 'fa-check' : booking.status === 'rejected' ? 'fa-times' : 'fa-clock'}"></i>
-                                        ${getBookingStatusText(booking.status)}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="admin-actions">
-                                <button class="btn-admin btn-approve" data-id="${booking.id}">
-                                    <i class="fas fa-check"></i> موافقة
-                                </button>
-                                <button class="btn-admin btn-reject" data-id="${booking.id}">
-                                    <i class="fas fa-times"></i> رفض
-                                </button>
-                                <button class="btn-admin btn-delete" data-id="${booking.id}">
-                                    <i class="fas fa-trash"></i> حذف
-                                </button>
-                                <button class="btn-admin btn-edit" data-id="${booking.id}">
-                                    <i class="fas fa-edit"></i> تعديل
-                                </button>
-                            </div>
-                        `;
-                        
-                        bookingsList.appendChild(bookingItem);
-                    });
-    
-                    document.querySelectorAll('.btn-approve').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            updateBookingStatus(this.dataset.id, 'approved');
-                        });
-                    });
-                    
-                    document.querySelectorAll('.btn-reject').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            updateBookingStatus(this.dataset.id, 'rejected');
-                        });
-                    });
-                    
-                    document.querySelectorAll('.btn-delete').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            deleteBooking(this.dataset.id);
-                        });
-                    });
-    
-                } catch (error) {
-                    console.error('Error loading bookings:', error);
-                    bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>حدث خطأ في تحميل الحجوزات</h4><p>الرجاء المحاولة مرة أخرى لاحقاً</p></div>';
-                }
-            }
-    
-            async function updateBookingStatus(bookingId, status) {
-                try {
-                    const response = await fetchAPI(`${API_BASE_URL}/bookings/${bookingId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ status })
-                    });
-    
-                    if (response) {
-                        showToast(`تم تحديث حالة الحجز #${bookingId} إلى "${getBookingStatusText(status)}" بنجاح`);
-                        
-                        const bookingItem = document.querySelector(`.booking-item[data-id="${bookingId}"]`);
-                        if (bookingItem) {
-                            bookingItem.dataset.status = status;
-                            const statusBadge = bookingItem.querySelector('.status-badge');
-                            statusBadge.className = `status-badge status-${status}`;
-                            statusBadge.innerHTML = `<i class="fas ${status === 'approved' ? 'fa-check' : status === 'rejected' ? 'fa-times' : 'fa-clock'}"></i> ${getBookingStatusText(status)}`;
-                            
-                            updateDashboardStats();
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error updating booking status:', error);
-                    showToast('حدث خطأ أثناء تحديث حالة الحجز', false);
-                }
-            }
-    
-            async function deleteBooking(bookingId) {
-                Swal.fire({
-                    title: 'هل أنت متأكد؟',
-                    text: "لن تتمكن من استعادة هذا الحجز!",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#2E7D32',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'نعم، احذفه!',
-                    cancelButtonText: 'إلغاء'
-                }).then(async (result) => {
-                    if (result.isConfirmed) {
-                        try {
-                            const response = await fetchAPI(`${API_BASE_URL}/bookings/${bookingId}`, {
-                                method: 'DELETE'
-                            });
-    
-                            if (response) {
-                                showToast(`تم حذف الحجز #${bookingId} بنجاح`);
-                                
-                                const bookingItem = document.querySelector(`.booking-item[data-id="${bookingId}"]`);
-                                if (bookingItem) {
-                                    bookingItem.remove();
-                                }
-                                
-                                updateDashboardStats();
-                                
-                                if (document.querySelectorAll('.booking-item').length === 0) {
-                                    bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><h4>لا توجد حجوزات متاحة</h4><p>لم يتم العثور على أي حجوزات في النظام</p></div>';
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error deleting booking:', error);
-                            showToast('حدث خطأ أثناء حذف الحجز', false);
-                        }
-                    }
-                });
-            }
-    
             async function renderAdminTrips() {
                 tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><h4>جاري تحميل الرحلات...</h4></div>';
                 
                 try {
-                    const trips = await fetchAPI(`${API_BASE_URL}/trips`);
+                    const response = await fetch(`${API_BASE_URL}/trips`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch trips');
+                    }
+                    
+                    const trips = await response.json();
                     
                     if (!trips || trips.length === 0) {
                         tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-plane-slash"></i><h4>لا توجد رحلات متاحة</h4><p>قم بإضافة رحلة جديدة لتبدأ في استقبال الحجوزات</p><button id="addTripBtn2" class="btn"><i class="fas fa-plus"></i> إضافة رحلة جديدة</button></div>';
@@ -1599,9 +1442,16 @@
                     tripsList.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>حدث خطأ في تحميل الرحلات</h4><p>الرجاء المحاولة مرة أخرى لاحقاً</p></div>';
                 }
             }
+    
             async function editTrip(tripId) {
                 try {
-                    const trip = await fetchAPI(`${API_BASE_URL}/trips/${tripId}`);
+                    const response = await fetch(`${API_BASE_URL}/trips/${tripId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch trip');
+                    }
+                    
+                    const trip = await response.json();
                     
                     if (!trip) {
                         showToast('لم يتم العثور على الرحلة', false);
@@ -1650,11 +1500,17 @@
                 }).then(async (result) => {
                     if (result.isConfirmed) {
                         try {
-                            const response = await fetchAPI(`${API_BASE_URL}/trips/${tripId}`, {
+                            const response = await fetch(`${API_BASE_URL}/trips/${tripId}`, {
                                 method: 'DELETE'
                             });
     
-                            if (response) {
+                            if (!response.ok) {
+                                throw new Error('Failed to delete trip');
+                            }
+                            
+                            const result = await response.json();
+                            
+                            if (result.message) {
                                 showToast(`تم حذف الرحلة #${tripId} بنجاح`);
                                 
                                 const tripItem = document.querySelector(`.trip-item[data-id="${tripId}"]`);
@@ -1681,7 +1537,13 @@
                 tripSelector.innerHTML = '';
                 
                 try {
-                    const trips = await fetchAPI(`${API_BASE_URL}/trips`);
+                    const response = await fetch(`${API_BASE_URL}/trips`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch trips');
+                    }
+                    
+                    const trips = await response.json();
                     
                     if (!trips || trips.length === 0) {
                         showToast('لا توجد رحلات متاحة', false);
@@ -1706,7 +1568,13 @@
     
             async function loadTripStatus(tripId) {
                 try {
-                    const trip = await fetchAPI(`${API_BASE_URL}/trips/${tripId}`);
+                    const response = await fetch(`${API_BASE_URL}/trips/${tripId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch trip');
+                    }
+                    
+                    const trip = await response.json();
                     
                     if (!trip) {
                         showToast('لم يتم العثور على الرحلة', false);
@@ -1721,164 +1589,6 @@
                     console.error('Error loading trip status:', error);
                     showToast('حدث خطأ أثناء تحميل حالة الغرف', false);
                 }
-            }
-    
-            async function saveTripStatus() {
-                const tripId = tripSelector.value;
-                const room5Status = document.querySelector('.status-select[data-room-type="5"]').value;
-                const room4Status = document.querySelector('.status-select[data-room-type="4"]').value;
-                const room3Status = document.querySelector('.status-select[data-room-type="3"]').value;
-                const room2Status = document.querySelector('.status-select[data-room-type="2"]').value;
-                
-                try {
-                    const response = await fetchAPI(`${API_BASE_URL}/trips/${tripId}/status`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            room5_status: room5Status,
-                            room4_status: room4Status,
-                            room3_status: room3Status,
-                            room2_status: room2Status
-                        })
-                    });
-    
-                    if (response) {
-                        showToast(`تم تحديث حالة غرف الرحلة #${tripId} بنجاح`);
-                    }
-                } catch (error) {
-                    console.error('Error saving trip status:', error);
-                    showToast('حدث خطأ أثناء حفظ حالة الغرف', false);
-                }
-            }
-    
-            async function updateDashboardStats() {
-                try {
-                    const stats = await fetchAPI(`${API_BASE_URL}/stats`);
-                    
-                    if (!stats) return;
-    
-                    totalBookingsEl.textContent = stats.total_bookings;
-                    pendingBookingsEl.textContent = stats.pending_bookings;
-                    approvedBookingsEl.textContent = stats.approved_bookings;
-                    totalTripsEl.textContent = stats.total_trips;
-                    
-                    renderCharts(stats.state_stats, stats.type_stats);
-                } catch (error) {
-                    console.error('Error loading stats:', error);
-                }
-            }
-    
-            function renderCharts(stateStats = {}, typeStats = {}) {
-                const ctx1 = document.getElementById('bookingsByStateChart').getContext('2d');
-                
-                if (bookingsByStateChart) {
-                    bookingsByStateChart.destroy();
-                }
-                
-                bookingsByStateChart = new Chart(ctx1, {
-                    type: 'bar',
-                    data: {
-                        labels: ['الجزائر', 'سطيف', 'شلف', 'تيسمسيلت'],
-                        datasets: [{
-                            label: 'عدد الحجوزات',
-                            data: [
-                                stateStats.algiers || 0,
-                                stateStats.oran || 0,
-                                stateStats.constantine || 0,
-                                stateStats.batna || 0
-                            ],
-                            backgroundColor: [
-                                'rgba(46, 125, 50, 0.7)',
-                                'rgba(76, 175, 80, 0.7)',
-                                'rgba(27, 94, 32, 0.7)',
-                                'rgba(106, 168, 79, 0.7)'
-                            ],
-                            borderColor: [
-                                'rgba(46, 125, 50, 1)',
-                                'rgba(76, 175, 80, 1)',
-                                'rgba(27, 94, 32, 1)',
-                                'rgba(106, 168, 79, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: {
-                                    color: 'rgba(255, 255, 255, 0.1)'
-                                },
-                                ticks: {
-                                    color: 'rgba(255, 255, 255, 0.7)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    color: 'rgba(255, 255, 255, 0.1)'
-                                },
-                                ticks: {
-                                    color: 'rgba(255, 255, 255, 0.7)'
-                                }
-                            }
-                        }
-                    }
-                });
-                
-                const ctx2 = document.getElementById('bookingsByTypeChart').getContext('2d');
-                
-                if (bookingsByTypeChart) {
-                    bookingsByTypeChart.destroy();
-                }
-                
-                bookingsByTypeChart = new Chart(ctx2, {
-                    type: 'pie',
-                    data: {
-                        labels: ['عمرة واحدة', 'عمرتين', 'عمرة خاصة', 'خارج الوطن'],
-                        datasets: [{
-                            data: [
-                                typeStats.single || 0,
-                                typeStats.double || 0,
-                                typeStats.special || 0,
-                                typeStats.abroad || 0
-                            ],
-                            backgroundColor: [
-                                'rgba(46, 125, 50, 0.7)',
-                                'rgba(76, 175, 80, 0.7)',
-                                'rgba(27, 94, 32, 0.7)',
-                                'rgba(106, 168, 79, 0.7)'
-                            ],
-                            borderColor: [
-                                'rgba(46, 125, 50, 1)',
-                                'rgba(76, 175, 80, 1)',
-                                'rgba(27, 94, 32, 1)',
-                                'rgba(106, 168, 79, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: 'rgba(255, 255, 255, 0.7)'
-                                }
-                            }
-                        }
-                    }
-                });
             }
     
             function setupEventListeners() {
@@ -1915,66 +1625,98 @@
                 });
                 
                 tripForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
+                    e.preventDefault();
+                    
+                    const mode = this.dataset.mode;
+                    const tripData = {
+                        date: document.getElementById('tripDate').value,
+                        airline: document.getElementById('tripAirline').value,
+                        airline_logo: document.getElementById('tripAirlineLogo').value || '',
+                        route: document.getElementById('tripRoute').value,
+                        duration: parseInt(document.getElementById('tripDuration').value),
+                        type: document.getElementById('tripType').value,
+                        state: document.getElementById('tripState').value,
+                        room5_price: parseInt(document.getElementById('tripPrice5').value),
+                        room4_price: parseInt(document.getElementById('tripPrice4').value),
+                        room3_price: parseInt(document.getElementById('tripPrice3').value),
+                        room2_price: parseInt(document.getElementById('tripPrice2').value)
+                    };
+                    
+                    try {
+                        let response;
+                        let url = `${API_BASE_URL}/trips`;
+                        let method = 'POST';
+                        
+                        if (mode === 'edit') {
+                            url = `${API_BASE_URL}/trips/${this.dataset.id}`;
+                            method = 'PUT';
+                        }
+                        
+                        response = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(tripData)
+                        });
     
-    const mode = this.dataset.mode;
-    const tripData = {
-        date: document.getElementById('tripDate').value,
-        airline: document.getElementById('tripAirline').value,
-        airline_logo: document.getElementById('tripAirlineLogo').value || '',
-        route: document.getElementById('tripRoute').value,
-        duration: parseInt(document.getElementById('tripDuration').value),
-        type: document.getElementById('tripType').value,
-        state: document.getElementById('tripState').value,
-        room5_price: parseInt(document.getElementById('tripPrice5').value),
-        room4_price: parseInt(document.getElementById('tripPrice4').value),
-        room3_price: parseInt(document.getElementById('tripPrice3').value),
-        room2_price: parseInt(document.getElementById('tripPrice2').value)
-    };
-    
-    try {
-        let response;
-        let url = `${API_BASE_URL}/trips`;
-        let method = 'POST';
-        
-        if (mode === 'edit') {
-            url = `${API_BASE_URL}/trips/${this.dataset.id}`;
-            method = 'PUT';
-        }
-        
-        response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(tripData)
-        });
-
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.error || 'Failed to save trip');
-        }
-        
-        showToast(mode === 'add' ? 'تم إضافة الرحلة بنجاح' : 'تم تحديث الرحلة بنجاح');
-        
-        document.querySelector('.add-trip-form').style.display = 'none';
-        addTripBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة رحلة جديدة';
-        
-        renderAdminTrips();
-        setupTripSelector();
-        updateDashboardStats();
-    } catch (error) {
-        console.error('Error saving trip:', error);
-        showToast(error.message || 'حدث خطأ أثناء حفظ الرحلة', false);
-    }
-});
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Failed to save trip');
+                        }
+                        
+                        showToast(mode === 'add' ? 'تم إضافة الرحلة بنجاح' : 'تم تحديث الرحلة بنجاح');
+                        
+                        document.querySelector('.add-trip-form').style.display = 'none';
+                        addTripBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة رحلة جديدة';
+                        
+                        renderAdminTrips();
+                        setupTripSelector();
+                        updateDashboardStats();
+                    } catch (error) {
+                        console.error('Error saving trip:', error);
+                        showToast(error.message || 'حدث خطأ أثناء حفظ الرحلة', false);
+                    }
+                });
                 
                 tripSelector.addEventListener('change', function() {
                     loadTripStatus(this.value);
                 });
                 
-                saveStatusBtn.addEventListener('click', saveTripStatus);
+                saveStatusBtn.addEventListener('click', async function() {
+                    const tripId = tripSelector.value;
+                    const room5Status = document.querySelector('.status-select[data-room-type="5"]').value;
+                    const room4Status = document.querySelector('.status-select[data-room-type="4"]').value;
+                    const room3Status = document.querySelector('.status-select[data-room-type="3"]').value;
+                    const room2Status = document.querySelector('.status-select[data-room-type="2"]').value;
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/trips/${tripId}/status`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                room5_status: room5Status,
+                                room4_status: room4Status,
+                                room3_status: room3Status,
+                                room2_status: room2Status
+                            })
+                        });
+    
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Failed to update status');
+                        }
+                        
+                        showToast(`تم تحديث حالة غرف الرحلة #${tripId} بنجاح`);
+                    } catch (error) {
+                        console.error('Error saving trip status:', error);
+                        showToast('حدث خطأ أثناء حفظ حالة الغرف', false);
+                    }
+                });
             }
     
             init();
