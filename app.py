@@ -7,8 +7,11 @@ import os
 app = Flask(__name__, static_folder='static', template_folder='.')
 CORS(app)
 
+# تحديد مسار قاعدة البيانات بشكل مطلق لضمان استمراريتها
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'umrah.db')
+
 def init_db():
-    conn = sqlite3.connect('umrah.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # إنشاء جدول الرحلات إذا لم يكن موجودًا
@@ -52,22 +55,6 @@ def init_db():
         FOREIGN KEY (trip_id) REFERENCES trips (id)
     )''')
     
-    # التحقق مما إذا كانت الجداول فارغة لإضافة بيانات نموذجية
-    c.execute('SELECT COUNT(*) FROM trips')
-    if c.fetchone()[0] == 0:
-        sample_trips = [
-            ('2025-11-15', 'الخطوط الجزائرية', 'https://example.com/airalgerie.png', 'الجزائر - جدة', 10, 'economy', 'algiers', 1500000, 'available', 1800000, 'available', 2200000, 'available', 3000000, 'available'),
-            ('2025-11-20', 'الخطوط السعودية', 'https://example.com/saudia.png', 'سطيف - جدة', 12, 'premium', 'oran', 2000000, 'available', 2500000, 'available', 3000000, 'available', 4000000, 'available'),
-            ('2025-12-05', 'الطيران العماني', 'https://example.com/omanair.png', 'شلف - جدة', 8, 'economy', 'constantine', 1200000, 'available', 1500000, 'available', 1800000, 'available', 2500000, 'available'),
-            ('2025-12-15', 'الخطوط الإماراتية', 'https://example.com/emirates.png', 'تيسمسيلت - جدة', 14, 'abroad', 'batna', 2500000, 'available', 3000000, 'available', 3500000, 'available', 5000000, 'available')
-        ]
-        
-        c.executemany('''INSERT INTO trips 
-            (date, airline, airline_logo, route, duration, type, state, 
-             room5_price, room5_status, room4_price, room4_status, 
-             room3_price, room3_status, room2_price, room2_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', sample_trips)
-    
     conn.commit()
     conn.close()
 
@@ -75,7 +62,7 @@ def init_db():
 init_db()
 
 def get_db():
-    conn = sqlite3.connect('umrah.db')
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -86,7 +73,7 @@ def serve_static(path):
 @app.route('/')
 def serve_index():
     return render_template('index.html')
-    # في ملف app.py، أضف هذه الدالة
+
 @app.route('/api/check-password', methods=['POST'])
 def check_password():
     data = request.get_json()
@@ -106,33 +93,78 @@ def get_trips():
     state = request.args.get('state', 'all')
     trip_type = request.args.get('type', 'all')
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    query = 'SELECT * FROM trips'
-    params = []
-    
-    if state != 'all' or trip_type != 'all':
-        query += ' WHERE '
-        conditions = []
+    try:
+        conn = get_db()
+        c = conn.cursor()
         
-        if state != 'all':
-            conditions.append('state = ?')
-            params.append(state)
+        query = 'SELECT * FROM trips'
+        params = []
+        
+        if state != 'all' or trip_type != 'all':
+            query += ' WHERE '
+            conditions = []
             
-        if trip_type != 'all':
-            conditions.append('type = ?')
-            params.append(trip_type)
-            
-        query += ' AND '.join(conditions)
-    
-    c.execute(query, params)
-    trips = c.fetchall()
-    conn.close()
-    
-    trips_list = []
-    for trip in trips:
-        trips_list.append({
+            if state != 'all':
+                conditions.append('state = ?')
+                params.append(state)
+                
+            if trip_type != 'all':
+                conditions.append('type = ?')
+                params.append(trip_type)
+                
+            query += ' AND '.join(conditions)
+        
+        c.execute(query, params)
+        trips = c.fetchall()
+        
+        trips_list = []
+        for trip in trips:
+            trips_list.append({
+                'id': trip['id'],
+                'date': trip['date'],
+                'airline': trip['airline'],
+                'airline_logo': trip['airline_logo'],
+                'route': trip['route'],
+                'duration': trip['duration'],
+                'type': trip['type'],
+                'state': trip['state'],
+                'room5': {
+                    'price': trip['room5_price'],
+                    'status': trip['room5_status']
+                },
+                'room4': {
+                    'price': trip['room4_price'],
+                    'status': trip['room4_status']
+                },
+                'room3': {
+                    'price': trip['room3_price'],
+                    'status': trip['room3_status']
+                },
+                'room2': {
+                    'price': trip['room2_price'],
+                    'status': trip['room2_status']
+                }
+            })
+        
+        return jsonify(trips_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/trips/<int:trip_id>', methods=['GET'])
+def get_trip(trip_id):
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
+        trip = c.fetchone()
+        
+        if not trip:
+            return jsonify({'error': 'Trip not found'}), 404
+        
+        return jsonify({
             'id': trip['id'],
             'date': trip['date'],
             'airline': trip['airline'],
@@ -158,47 +190,10 @@ def get_trips():
                 'status': trip['room2_status']
             }
         })
-    
-    return jsonify(trips_list)
-
-@app.route('/api/trips/<int:trip_id>', methods=['GET'])
-def get_trip(trip_id):
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
-    trip = c.fetchone()
-    conn.close()
-    
-    if not trip:
-        return jsonify({'error': 'Trip not found'}), 404
-    
-    return jsonify({
-        'id': trip['id'],
-        'date': trip['date'],
-        'airline': trip['airline'],
-        'airline_logo': trip['airline_logo'],
-        'route': trip['route'],
-        'duration': trip['duration'],
-        'type': trip['type'],
-        'state': trip['state'],
-        'room5': {
-            'price': trip['room5_price'],
-            'status': trip['room5_status']
-        },
-        'room4': {
-            'price': trip['room4_price'],
-            'status': trip['room4_status']
-        },
-        'room3': {
-            'price': trip['room3_price'],
-            'status': trip['room3_status']
-        },
-        'room2': {
-            'price': trip['room2_price'],
-            'status': trip['room2_status']
-        }
-    })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/trips', methods=['POST'])
 def create_trip():
@@ -211,91 +206,99 @@ def create_trip():
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('''INSERT INTO trips 
-        (date, airline, airline_logo, route, duration, type, state,
-         room5_price, room5_status, room4_price, room4_status,
-         room3_price, room3_status, room2_price, room2_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-        (data['date'], data['airline'], data.get('airline_logo', ''), data['route'], 
-         data['duration'], data['type'], data['state'],
-         data['room5_price'], 'available', data['room4_price'], 'available',
-         data['room3_price'], 'available', data['room2_price'], 'available'))
-    
-    trip_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Trip created successfully', 'id': trip_id}), 201
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('''INSERT INTO trips 
+            (date, airline, airline_logo, route, duration, type, state,
+             room5_price, room5_status, room4_price, room4_status,
+             room3_price, room3_status, room2_price, room2_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (data['date'], data['airline'], data.get('airline_logo', ''), data['route'], 
+             data['duration'], data['type'], data['state'],
+             data['room5_price'], 'available', data['room4_price'], 'available',
+             data['room3_price'], 'available', data['room2_price'], 'available'))
+        
+        trip_id = c.lastrowid
+        conn.commit()
+        
+        return jsonify({'message': 'Trip created successfully', 'id': trip_id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/trips/<int:trip_id>', methods=['PUT'])
 def update_trip(trip_id):
     data = request.get_json()
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
-    trip = c.fetchone()
-    
-    if not trip:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
+        trip = c.fetchone()
+        
+        if not trip:
+            return jsonify({'error': 'Trip not found'}), 404
+        
+        update_fields = {
+            'date': data.get('date', trip['date']),
+            'airline': data.get('airline', trip['airline']),
+            'airline_logo': data.get('airline_logo', trip['airline_logo']),
+            'route': data.get('route', trip['route']),
+            'duration': data.get('duration', trip['duration']),
+            'type': data.get('type', trip['type']),
+            'state': data.get('state', trip['state']),
+            'room5_price': data.get('room5_price', trip['room5_price']),
+            'room4_price': data.get('room4_price', trip['room4_price']),
+            'room3_price': data.get('room3_price', trip['room3_price']),
+            'room2_price': data.get('room2_price', trip['room2_price'])
+        }
+        
+        c.execute('''UPDATE trips SET 
+            date = ?, airline = ?, airline_logo = ?, route = ?, duration = ?, type = ?, state = ?,
+            room5_price = ?, room4_price = ?, room3_price = ?, room2_price = ?
+            WHERE id = ?''',
+            (update_fields['date'], update_fields['airline'], update_fields['airline_logo'],
+             update_fields['route'], update_fields['duration'], update_fields['type'],
+             update_fields['state'], update_fields['room5_price'], update_fields['room4_price'],
+             update_fields['room3_price'], update_fields['room2_price'], trip_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Trip updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Trip not found'}), 404
-    
-    update_fields = {
-        'date': data.get('date', trip['date']),
-        'airline': data.get('airline', trip['airline']),
-        'airline_logo': data.get('airline_logo', trip['airline_logo']),
-        'route': data.get('route', trip['route']),
-        'duration': data.get('duration', trip['duration']),
-        'type': data.get('type', trip['type']),
-        'state': data.get('state', trip['state']),
-        'room5_price': data.get('room5_price', trip['room5_price']),
-        'room4_price': data.get('room4_price', trip['room4_price']),
-        'room3_price': data.get('room3_price', trip['room3_price']),
-        'room2_price': data.get('room2_price', trip['room2_price'])
-    }
-    
-    c.execute('''UPDATE trips SET 
-        date = ?, airline = ?, airline_logo = ?, route = ?, duration = ?, type = ?, state = ?,
-        room5_price = ?, room4_price = ?, room3_price = ?, room2_price = ?
-        WHERE id = ?''',
-        (update_fields['date'], update_fields['airline'], update_fields['airline_logo'],
-         update_fields['route'], update_fields['duration'], update_fields['type'],
-         update_fields['state'], update_fields['room5_price'], update_fields['room4_price'],
-         update_fields['room3_price'], update_fields['room2_price'], trip_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Trip updated successfully'})
 
 @app.route('/api/trips/<int:trip_id>', methods=['DELETE'])
 def delete_trip(trip_id):
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
-    trip = c.fetchone()
-    
-    if not trip:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
+        trip = c.fetchone()
+        
+        if not trip:
+            return jsonify({'error': 'Trip not found'}), 404
+        
+        c.execute('SELECT COUNT(*) FROM bookings WHERE trip_id = ?', (trip_id,))
+        booking_count = c.fetchone()[0]
+        
+        if booking_count > 0:
+            return jsonify({'error': 'Cannot delete trip with existing bookings'}), 400
+        
+        c.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Trip deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Trip not found'}), 404
-    
-    c.execute('SELECT COUNT(*) FROM bookings WHERE trip_id = ?', (trip_id,))
-    booking_count = c.fetchone()[0]
-    
-    if booking_count > 0:
-        conn.close()
-        return jsonify({'error': 'Cannot delete trip with existing bookings'}), 400
-    
-    c.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Trip deleted successfully'})
 
 @app.route('/api/trips/<int:trip_id>/status', methods=['PUT'])
 def update_trip_status(trip_id):
@@ -307,63 +310,69 @@ def update_trip_status(trip_id):
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
-    trip = c.fetchone()
-    
-    if not trip:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM trips WHERE id = ?', (trip_id,))
+        trip = c.fetchone()
+        
+        if not trip:
+            return jsonify({'error': 'Trip not found'}), 404
+        
+        c.execute('''UPDATE trips SET 
+            room5_status = ?, room4_status = ?, room3_status = ?, room2_status = ?
+            WHERE id = ?''',
+            (data['room5_status'], data['room4_status'], 
+             data['room3_status'], data['room2_status'], trip_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Trip status updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Trip not found'}), 404
-    
-    c.execute('''UPDATE trips SET 
-        room5_status = ?, room4_status = ?, room3_status = ?, room2_status = ?
-        WHERE id = ?''',
-        (data['room5_status'], data['room4_status'], 
-         data['room3_status'], data['room2_status'], trip_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Trip status updated successfully'})
 
 @app.route('/api/bookings', methods=['GET'])
 def get_bookings():
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('''SELECT b.*, t.date as trip_date, t.airline as trip_airline 
-               FROM bookings b JOIN trips t ON b.trip_id = t.id''')
-    bookings = c.fetchall()
-    conn.close()
-    
-    bookings_list = []
-    for booking in bookings:
-        bookings_list.append({
-            'id': booking['id'],
-            'trip_id': booking['trip_id'],
-            'firstName': booking['first_name'],
-            'lastName': booking['last_name'],
-            'email': booking['email'],
-            'phone': booking['phone'],
-            'birthDate': booking['birth_date'],
-            'birthPlace': booking['birth_place'],
-            'passportNumber': booking['passport_number'],
-            'passportIssueDate': booking['passport_issue_date'],
-            'passportExpiryDate': booking['passport_expiry_date'],
-            'umrahType': booking['umrah_type'],
-            'roomType': booking['room_type'],
-            'notes': booking['notes'],
-            'status': booking['status'],
-            'bookingDate': booking['booking_date'],
-            'trip': {
-                'date': booking['trip_date'],
-                'airline': booking['trip_airline']
-            }
-        })
-    
-    return jsonify(bookings_list)
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('''SELECT b.*, t.date as trip_date, t.airline as trip_airline 
+                   FROM bookings b JOIN trips t ON b.trip_id = t.id''')
+        bookings = c.fetchall()
+        
+        bookings_list = []
+        for booking in bookings:
+            bookings_list.append({
+                'id': booking['id'],
+                'trip_id': booking['trip_id'],
+                'firstName': booking['first_name'],
+                'lastName': booking['last_name'],
+                'email': booking['email'],
+                'phone': booking['phone'],
+                'birthDate': booking['birth_date'],
+                'birthPlace': booking['birth_place'],
+                'passportNumber': booking['passport_number'],
+                'passportIssueDate': booking['passport_issue_date'],
+                'passportExpiryDate': booking['passport_expiry_date'],
+                'umrahType': booking['umrah_type'],
+                'roomType': booking['room_type'],
+                'notes': booking['notes'],
+                'status': booking['status'],
+                'bookingDate': booking['booking_date'],
+                'trip': {
+                    'date': booking['trip_date'],
+                    'airline': booking['trip_airline']
+                }
+            })
+        
+        return jsonify(bookings_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/bookings', methods=['POST'])
 def create_booking():
@@ -378,36 +387,38 @@ def create_booking():
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM trips WHERE id = ?', (data['tripId'],))
-    trip = c.fetchone()
-    
-    if not trip:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM trips WHERE id = ?', (data['tripId'],))
+        trip = c.fetchone()
+        
+        if not trip:
+            return jsonify({'error': 'Trip not found'}), 404
+        
+        room_status_field = f'room{data["roomType"]}_status'
+        if trip[room_status_field] == 'full':
+            return jsonify({'error': 'This room type is fully booked'}), 400
+        
+        c.execute('''INSERT INTO bookings 
+            (trip_id, first_name, last_name, email, phone, birth_date, birth_place,
+             passport_number, passport_issue_date, passport_expiry_date, umrah_type,
+             room_type, notes, booking_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (data['tripId'], data['firstName'], data['lastName'], data['email'],
+             data['phone'], data['birthDate'], data['birthPlace'], data['passportNumber'],
+             data['passportIssueDate'], data['passportExpiryDate'], data['umrahType'],
+             data['roomType'], data.get('notes', ''), datetime.now().isoformat()))
+        
+        booking_id = c.lastrowid
+        conn.commit()
+        
+        return jsonify({'message': 'Booking created successfully', 'id': booking_id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Trip not found'}), 404
-    
-    room_status_field = f'room{data["roomType"]}_status'
-    if trip[room_status_field] == 'full':
-        conn.close()
-        return jsonify({'error': 'This room type is fully booked'}), 400
-    
-    c.execute('''INSERT INTO bookings 
-        (trip_id, first_name, last_name, email, phone, birth_date, birth_place,
-         passport_number, passport_issue_date, passport_expiry_date, umrah_type,
-         room_type, notes, booking_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-        (data['tripId'], data['firstName'], data['lastName'], data['email'],
-         data['phone'], data['birthDate'], data['birthPlace'], data['passportNumber'],
-         data['passportIssueDate'], data['passportExpiryDate'], data['umrahType'],
-         data['roomType'], data.get('notes', ''), datetime.now().isoformat()))
-    
-    booking_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Booking created successfully', 'id': booking_id}), 201
 
 @app.route('/api/bookings/<int:booking_id>', methods=['PUT'])
 def update_booking(booking_id):
@@ -416,77 +427,85 @@ def update_booking(booking_id):
     if 'status' not in data:
         return jsonify({'error': 'Missing required field: status'}), 400
     
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM bookings WHERE id = ?', (booking_id,))
-    booking = c.fetchone()
-    
-    if not booking:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM bookings WHERE id = ?', (booking_id,))
+        booking = c.fetchone()
+        
+        if not booking:
+            return jsonify({'error': 'Booking not found'}), 404
+        
+        c.execute('UPDATE bookings SET status = ? WHERE id = ?', 
+                  (data['status'], booking_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Booking status updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Booking not found'}), 404
-    
-    c.execute('UPDATE bookings SET status = ? WHERE id = ?', 
-              (data['status'], booking_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Booking status updated successfully'})
 
 @app.route('/api/bookings/<int:booking_id>', methods=['DELETE'])
 def delete_booking(booking_id):
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT * FROM bookings WHERE id = ?', (booking_id,))
-    booking = c.fetchone()
-    
-    if not booking:
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT * FROM bookings WHERE id = ?', (booking_id,))
+        booking = c.fetchone()
+        
+        if not booking:
+            return jsonify({'error': 'Booking not found'}), 404
+        
+        c.execute('DELETE FROM bookings WHERE id = ?', (booking_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Booking deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Booking not found'}), 404
-    
-    c.execute('DELETE FROM bookings WHERE id = ?', (booking_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Booking deleted successfully'})
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('SELECT COUNT(*) FROM bookings')
-    total_bookings = c.fetchone()[0]
-    
-    c.execute('SELECT COUNT(*) FROM bookings WHERE status = ?', ('pending',))
-    pending_bookings = c.fetchone()[0]
-    
-    c.execute('SELECT COUNT(*) FROM bookings WHERE status = ?', ('approved',))
-    approved_bookings = c.fetchone()[0]
-    
-    c.execute('SELECT COUNT(*) FROM trips')
-    total_trips = c.fetchone()[0]
-    
-    c.execute('''SELECT b.birth_place as state, COUNT(*) as count 
-               FROM bookings b GROUP BY b.birth_place''')
-    state_stats = {row['state']: row['count'] for row in c.fetchall()}
-    
-    c.execute('''SELECT umrah_type as type, COUNT(*) as count 
-               FROM bookings GROUP BY umrah_type''')
-    type_stats = {row['type']: row['count'] for row in c.fetchall()}
-    
-    conn.close()
-    
-    return jsonify({
-        'total_bookings': total_bookings,
-        'pending_bookings': pending_bookings,
-        'approved_bookings': approved_bookings,
-        'total_trips': total_trips,
-        'state_stats': state_stats,
-        'type_stats': type_stats
-    })
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute('SELECT COUNT(*) FROM bookings')
+        total_bookings = c.fetchone()[0]
+        
+        c.execute('SELECT COUNT(*) FROM bookings WHERE status = ?', ('pending',))
+        pending_bookings = c.fetchone()[0]
+        
+        c.execute('SELECT COUNT(*) FROM bookings WHERE status = ?', ('approved',))
+        approved_bookings = c.fetchone()[0]
+        
+        c.execute('SELECT COUNT(*) FROM trips')
+        total_trips = c.fetchone()[0]
+        
+        c.execute('''SELECT b.birth_place as state, COUNT(*) as count 
+                   FROM bookings b GROUP BY b.birth_place''')
+        state_stats = {row['state']: row['count'] for row in c.fetchall()}
+        
+        c.execute('''SELECT umrah_type as type, COUNT(*) as count 
+                   FROM bookings GROUP BY umrah_type''')
+        type_stats = {row['type']: row['count'] for row in c.fetchall()}
+        
+        return jsonify({
+            'total_bookings': total_bookings,
+            'pending_bookings': pending_bookings,
+            'approved_bookings': approved_bookings,
+            'total_trips': total_trips,
+            'state_stats': state_stats,
+            'type_stats': type_stats
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
