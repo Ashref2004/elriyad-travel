@@ -1225,16 +1225,16 @@
             const typeChartContainer = document.getElementById('typeChartContainer');
             const tripAirlineSelect = document.getElementById('tripAirline');
             const tripAirlineLogoInput = document.getElementById('tripAirlineLogo');
+            const bookingSearch = document.getElementById('bookingSearch');
+            const filterBtns = document.querySelectorAll('.filter-btn');
     
             let bookingsByStateChart;
             let bookingsByTypeChart;
             let chartsVisible = false;
-    
-            let currentAdminSection = 'dashboard';
+            let currentBookingFilter = 'all';
     
             const API_BASE_URL = 'https://elriyad-travel-2.onrender.com/api';
     
-            // Initialize the app
             function init() {
                 setupEventListeners();
                 renderAdminBookings();
@@ -1298,8 +1298,8 @@
     
             function getUmrahTypeText(umrahType) {
                 const umrahTypes = {
-                    'single': 'عمرة واحدة',
-                    'double': 'عمرتين',
+                    'single': 'الإقتصادية',
+                    'double': 'المميز',
                     'special': 'عمرة خاصة',
                     'abroad': 'خارج الوطن'
                 };
@@ -1325,7 +1325,7 @@
                 };
                 return statusText[status] || status;
             }
-    
+            
             function getTripTypeText(type) {
                 const types = {
                     'economy': 'الإقتصادية',
@@ -1346,8 +1346,6 @@
                 
                 document.getElementById(`${sectionId}Section`).classList.add('active');
                 document.querySelector(`.admin-nav-btn[data-section="${sectionId}"]`).classList.add('active');
-                
-                currentAdminSection = sectionId;
                 
                 if (sectionId === 'dashboard') {
                     updateDashboardStats();
@@ -1385,7 +1383,21 @@
                         throw new Error('Failed to fetch bookings');
                     }
                     
-                    const bookings = await response.json();
+                    let bookings = await response.json();
+                    
+                    if (currentBookingFilter !== 'all') {
+                        bookings = bookings.filter(booking => booking.status === currentBookingFilter);
+                    }
+                    
+                    const searchTerm = bookingSearch.value.toLowerCase();
+                    if (searchTerm) {
+                        bookings = bookings.filter(booking => 
+                            `${booking.firstName} ${booking.lastName}`.toLowerCase().includes(searchTerm) ||
+                            booking.email.toLowerCase().includes(searchTerm) ||
+                            booking.phone.toLowerCase().includes(searchTerm) ||
+                            booking.passportNumber.toLowerCase().includes(searchTerm)
+                        );
+                    }
                     
                     if (!bookings || bookings.length === 0) {
                         bookingsList.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><h4>لا توجد حجوزات متاحة</h4><p>لم يتم العثور على أي حجوزات في النظام</p></div>';
@@ -1397,13 +1409,18 @@
                     bookings.forEach(booking => {
                         const bookingItem = document.createElement('div');
                         bookingItem.className = 'booking-item';
+                        bookingItem.dataset.id = booking.id;
                         
                         bookingItem.innerHTML = `
                             <div class="booking-item-header">
-                                <div class="booking-item-title">${booking.firstName} ${booking.lastName}</div>
+                                <div class="booking-item-title">الحجز #${booking.id}</div>
                                 <div class="booking-item-date">${formatDate(booking.bookingDate)}</div>
                             </div>
                             <div class="booking-item-details">
+                                <div class="booking-detail">
+                                    <label>الاسم الكامل</label>
+                                    <span>${booking.firstName} ${booking.lastName}</span>
+                                </div>
                                 <div class="booking-detail">
                                     <label>البريد الإلكتروني</label>
                                     <span>${booking.email}</span>
@@ -1411,6 +1428,26 @@
                                 <div class="booking-detail">
                                     <label>رقم الهاتف</label>
                                     <span>${booking.phone}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>تاريخ الميلاد</label>
+                                    <span>${formatDate(booking.birthDate)}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>مكان الميلاد</label>
+                                    <span>${booking.birthPlace}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>رقم جواز السفر</label>
+                                    <span>${booking.passportNumber}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>تاريخ إصدار الجواز</label>
+                                    <span>${formatDate(booking.passportIssueDate)}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>تاريخ انتهاء الجواز</label>
+                                    <span>${formatDate(booking.passportExpiryDate)}</span>
                                 </div>
                                 <div class="booking-detail">
                                     <label>نوع العمرة</label>
@@ -1421,19 +1458,25 @@
                                     <span>${getRoomTypeText(booking.roomType)}</span>
                                 </div>
                                 <div class="booking-detail">
-                                    <label>الحالة</label>
+                                    <label>ملاحظات إضافية</label>
+                                    <span>${booking.notes || 'لا توجد ملاحظات'}</span>
+                                </div>
+                                <div class="booking-detail">
+                                    <label>حالة الحجز</label>
                                     <span class="status-badge status-${booking.status}">
                                         ${getBookingStatusText(booking.status)}
                                     </span>
                                 </div>
                             </div>
                             <div class="admin-actions">
-                                <button class="btn-admin btn-approve" data-id="${booking.id}">
-                                    <i class="fas fa-check"></i> قبول
-                                </button>
-                                <button class="btn-admin btn-reject" data-id="${booking.id}">
-                                    <i class="fas fa-times"></i> رفض
-                                </button>
+                                ${booking.status === 'pending' ? `
+                                    <button class="btn-admin btn-approve" data-id="${booking.id}">
+                                        <i class="fas fa-check"></i> قبول
+                                    </button>
+                                    <button class="btn-admin btn-reject" data-id="${booking.id}">
+                                        <i class="fas fa-times"></i> رفض
+                                    </button>
+                                ` : ''}
                                 <button class="btn-admin btn-delete" data-id="${booking.id}">
                                     <i class="fas fa-trash"></i> حذف
                                 </button>
@@ -1572,7 +1615,6 @@
                     approvedBookingsEl.textContent = stats.approved_bookings || 0;
                     totalTripsEl.textContent = stats.total_trips || 0;
     
-                    // Update charts if they exist
                     if (bookingsByStateChart) {
                         bookingsByStateChart.data.labels = Object.keys(stats.state_stats || {});
                         bookingsByStateChart.data.datasets[0].data = Object.values(stats.state_stats || {});
@@ -1600,7 +1642,6 @@
                     
                     const stats = await response.json();
     
-                    // State Chart
                     const stateCtx = document.getElementById('bookingsByStateChart').getContext('2d');
                     bookingsByStateChart = new Chart(stateCtx, {
                         type: 'bar',
@@ -1625,7 +1666,6 @@
                         }
                     });
     
-                    // Type Chart
                     const typeCtx = document.getElementById('bookingsByTypeChart').getContext('2d');
                     bookingsByTypeChart = new Chart(typeCtx, {
                         type: 'pie',
@@ -2010,6 +2050,19 @@
                         console.error('Error saving trip status:', error);
                         showToast('حدث خطأ أثناء حفظ حالة الغرف', false);
                     }
+                });
+                
+                filterBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        filterBtns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        currentBookingFilter = this.dataset.filter;
+                        renderAdminBookings();
+                    });
+                });
+                
+                bookingSearch.addEventListener('input', function() {
+                    renderAdminBookings();
                 });
             }
     
