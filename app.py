@@ -94,7 +94,25 @@ def get_all_trips():
         conn = get_db()
         c = conn.cursor()
         
-        c.execute('SELECT * FROM trips')
+        # Get query parameters for filtering
+        state_filter = request.args.get('state', 'all')
+        type_filter = request.args.get('type', 'all')
+        
+        query = 'SELECT * FROM trips'
+        params = []
+        
+        # Add filters if not 'all'
+        if state_filter != 'all':
+            query += ' WHERE state = ?'
+            params.append(state_filter)
+            if type_filter != 'all':
+                query += ' AND type = ?'
+                params.append(type_filter)
+        elif type_filter != 'all':
+            query += ' WHERE type = ?'
+            params.append(type_filter)
+        
+        c.execute(query, params)
         trips = c.fetchall()
         
         trips_list = []
@@ -492,5 +510,6 @@ def get_stats():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
