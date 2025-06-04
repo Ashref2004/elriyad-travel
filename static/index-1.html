@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>جدول الرحلات</title>
+    <title>جدول الرحلات | عمرة نوفمبر - ديسمبر</title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
@@ -609,7 +609,7 @@
         </div>
     </div>
 
-    <a href="index.html" class="btn back-to-home">العودة للصفحة الرئيسية</a>
+    <a href="/index.html" class="btn back-to-home">العودة للصفحة الرئيسية</a>
 
     <div id="bookingModal" class="booking-modal">
         <div class="booking-content">
@@ -780,17 +780,19 @@
             const adminAccess = document.getElementById('adminAccess');
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
-
+    
             let currentFilter = 'all';
             let currentState = 'all';
             let clickCount = 0;
             let clickTimer = null;
-
+    
+            const API_BASE_URL = 'https://elriyad-travel-2.onrender.com/api';
+    
             function init() {
                 setupEventListeners();
                 renderTripsTable();
             }
-
+    
             function showToast(message, isSuccess = true) {
                 toastMessage.textContent = message;
                 toast.style.background = isSuccess ? 'var(--gradient)' : 'linear-gradient(135deg, #F44336 0%, #D32F2F 100%)';
@@ -801,15 +803,15 @@
                     toast.classList.remove('show');
                 }, 3000);
             }
-
+    
             function formatDate(dateString) {
                 return moment(dateString).format('DD/MM/YYYY');
             }
-
+    
             function formatPrice(price) {
                 return new Intl.NumberFormat('ar-DZ', { style: 'currency', currency: 'DZD' }).format(price);
             }
-
+    
             function getStatusText(status) {
                 const statusText = {
                     'available': 'متاح',
@@ -818,7 +820,7 @@
                 };
                 return statusText[status] || status;
             }
-
+    
             function getRoomTypeText(roomType) {
                 const roomTypes = {
                     '5': 'غرفة خماسية',
@@ -828,7 +830,7 @@
                 };
                 return roomTypes[roomType] || roomType;
             }
-
+    
             function getUmrahTypeText(umrahType) {
                 const umrahTypes = {
                     'single': 'عمرة واحدة',
@@ -838,7 +840,7 @@
                 };
                 return umrahTypes[umrahType] || umrahType;
             }
-
+    
             function getStateText(state) {
                 const states = {
                     'algiers': 'الجزائر',
@@ -848,9 +850,9 @@
                 };
                 return states[state] || state;
             }
-
+    
             function openBookingModal(tripId) {
-                fetch(`/api/trips/${tripId}`)
+                fetch(`${API_BASE_URL}/trips/${tripId}`)
                     .then(response => response.json())
                     .then(trip => {
                         document.getElementById('tripId').value = tripId;
@@ -864,64 +866,75 @@
                         console.error("Error getting trip: ", error);
                     });
             }
-
+    
             function closeBookingModal() {
                 bookingModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
             }
-
-            async function handleAdminAccess() {
-    clickCount++;
     
-    if (clickCount === 1) {
-        clickTimer = setTimeout(() => {
-            clickCount = 0;
-        }, 500);
-    } else if (clickCount === 2) {
-        clearTimeout(clickTimer);
-        clickCount = 0;
-        
-        const { value: password } = await Swal.fire({
-            title: 'أدخل كلمة المرور',
-            input: 'password',
-            inputAttributes: {
-                autocapitalize: 'off'
-            },
-            showCancelButton: true,
-            confirmButtonText: 'دخول',
-            cancelButtonText: 'إلغاء'
-        });
-        
-        if (password) {
-            try {
-                const response = await fetch('/api/check-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ password })
-                });
+            async function handleAdminAccess() {
+                clickCount++;
                 
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.location.href = 'dashboard.html';
-                } else {
-                    Swal.fire('خطأ', 'كلمة المرور خاطئة', 'error');
+                if (clickCount === 1) {
+                    clickTimer = setTimeout(() => {
+                        clickCount = 0;
+                    }, 500);
+                } else if (clickCount === 2) {
+                    clearTimeout(clickTimer);
+                    clickCount = 0;
+                    
+                    const { value: password } = await Swal.fire({
+                        title: 'أدخل كلمة المرور',
+                        input: 'password',
+                        inputAttributes: {
+                            autocapitalize: 'off'
+                        },
+                        showCancelButton: true,
+                        confirmButtonText: 'دخول',
+                        cancelButtonText: 'إلغاء'
+                    });
+                    
+                    if (password) {
+                        try {
+                            const response = await fetch(`${API_BASE_URL}/check-password`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ password })
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.success) {
+                                window.location.href = 'dashboard.html';
+                            } else {
+                                Swal.fire('خطأ', 'كلمة المرور خاطئة', 'error');
+                            }
+                        } catch (error) {
+                            Swal.fire('خطأ', 'حدث خطأ في الاتصال', 'error');
+                        }
+                    }
                 }
-            } catch (error) {
-                Swal.fire('خطأ', 'حدث خطأ في الاتصال', 'error');
             }
-        }
-    }
-}
-
+    
             function renderTripsTable() {
                 tripsTable.innerHTML = '';
                 
-                fetch(`/api/trips?state=${currentState}&type=${currentFilter}`)
+                fetch(`${API_BASE_URL}/trips?state=${currentState}&type=${currentFilter}`)
                     .then(response => response.json())
                     .then(trips => {
+                        if (!trips || trips.length === 0) {
+                            tripsTable.innerHTML = `
+                                <tr>
+                                    <td colspan="9" style="text-align: center; padding: 30px;">
+                                        لا توجد رحلات متاحة حالياً
+                                    </td>
+                                </tr>
+                            `;
+                            return;
+                        }
+    
                         trips.forEach(trip => {
                             const row = document.createElement('tr');
                             row.dataset.id = trip.id;
@@ -929,7 +942,7 @@
                             row.innerHTML = `
                                 <td>${formatDate(trip.date)}</td>
                                 <td>
-                                    <img src="${trip.airline_logo}" alt="${trip.airline}" class="airline-logo">
+                                    ${trip.airline_logo ? `<img src="${trip.airline_logo}" alt="${trip.airline}" class="airline-logo">` : ''}
                                     ${trip.airline}
                                 </td>
                                 <td>
@@ -961,7 +974,7 @@
                             
                             tripsTable.appendChild(row);
                         });
-
+    
                         document.querySelectorAll('.btn-book').forEach(btn => {
                             btn.addEventListener('click', function() {
                                 openBookingModal(this.dataset.id);
@@ -971,9 +984,16 @@
                     .catch(error => {
                         showToast('حدث خطأ أثناء جلب بيانات الرحلات', false);
                         console.error("Error getting trips: ", error);
+                        tripsTable.innerHTML = `
+                            <tr>
+                                <td colspan="9" style="text-align: center; padding: 30px; color: #F44336;">
+                                    حدث خطأ في تحميل الرحلات. الرجاء المحاولة لاحقاً.
+                                </td>
+                            </tr>
+                        `;
                     });
             }
-
+    
             function setupEventListeners() {
                 searchInput.addEventListener('input', function() {
                     const searchTerm = this.value.toLowerCase();
@@ -1026,7 +1046,7 @@
                         notes: document.getElementById('notes').value
                     };
                     
-                    fetch('/api/bookings', {
+                    fetch(`${API_BASE_URL}/bookings`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1054,7 +1074,7 @@
                     }
                 });
             }
-
+    
             init();
         });
     </script>
